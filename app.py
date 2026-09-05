@@ -147,7 +147,7 @@ USER QUESTION:
                     with st.spinner("🤖 AI is analyzing the document..."):
 
                         response = client.interactions.create(
-                            model="gemini-2.5-flash-lite",
+                            model="gemini-3.5-flash-lite",
                             input=prompt
                         )
 
