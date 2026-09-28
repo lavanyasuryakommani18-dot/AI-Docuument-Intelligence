@@ -60,26 +60,6 @@ if st.button("📝 Generate YouTube Short Notes"):
                     snippet.text for snippet in transcript
                 )
 
-                st.success(
-                    "✅ YouTube transcript fetched successfully!"
-                )
-
-                st.text_area(
-                    "📋 Video Transcript",
-                    transcript_text,
-                    height=250
-                )
-
-            except Exception as e:
-
-                st.error(
-                    f"❌ Could not fetch transcript: {e}"
-                )
-
-                transcript_text = " ".join(
-                    snippet.text for snippet in transcript
-                )
-
                 st.success("✅ YouTube transcript fetched successfully!")
 
                 st.text_area(
