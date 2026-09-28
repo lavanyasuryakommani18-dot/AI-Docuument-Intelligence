@@ -48,7 +48,13 @@ if st.button("📝 Generate YouTube Short Notes"):
 
                 ytt_api = YouTubeTranscriptApi()
 
-                transcript = ytt_api.fetch(video_id)
+transcript_list = ytt_api.list(video_id)
+
+transcript = transcript_list.find_transcript(
+    [t.language_code for t in transcript_list]
+)
+
+transcript = transcript.fetch() 
 
                 transcript_text = " ".join(
                     snippet.text for snippet in transcript
