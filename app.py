@@ -71,6 +71,68 @@ if st.button("📝 Generate YouTube Short Notes"):
                     transcript_text,
                     height=250
                 )
+            if client is None:
+
+    st.error(
+        "Gemini API key not found. Please check Streamlit Secrets."
+    )
+
+else:
+
+    if notes_language == "English":
+
+        language_instruction = "Write the notes in simple English."
+
+    elif notes_language == "Telugu":
+
+        language_instruction = "Write the notes in simple Telugu."
+
+    else:
+
+        language_instruction = """
+Write the notes in simple Telugu using English letters.
+Keep important technical terms in English.
+"""
+
+    youtube_prompt = f"""
+You are an AI class notes assistant.
+
+Create short and easy-to-understand notes from the YouTube transcript.
+
+{language_instruction}
+
+Requirements:
+- Give a short title.
+- Use clear headings.
+- Use bullet points.
+- Include only important concepts.
+- Keep the notes concise.
+- Do not invent information.
+- Make it useful for exam revision.
+
+TRANSCRIPT:
+{transcript_text}
+"""
+
+    with st.spinner("🤖 Gemini is creating class notes..."):
+
+        response = client.interactions.create(
+            model="gemini-3.5-flash-lite",
+            input=youtube_prompt
+        )
+
+        notes = response.output_text
+
+    st.subheader("📚 YouTube Class Notes")
+
+    st.write(notes)
+
+    st.download_button(
+        "⬇️ Download Class Notes",
+        notes,
+        file_name="YouTube_Class_Notes.txt",
+        mime="text/plain"
+    )
 
             except Exception as e:
 
