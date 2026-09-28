@@ -27,6 +27,10 @@ st.subheader("🎥 YouTube Class Notes")
 youtube_url = st.text_input(
     "🔗 Paste a YouTube class/video link"
 )
+notes_language = st.selectbox(
+    "Select Notes Language",
+    ["English", "Telugu", "Telugu + English"]
+)
 
 if st.button("📝 Generate YouTube Short Notes"):
 
