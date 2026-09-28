@@ -2,6 +2,7 @@ import streamlit as st
 from pypdf import PdfReader
 from google import genai
 import base64
+from youtube_transcript_api import YouTubeTranscriptApi
 
 st.set_page_config(
     page_title="AI Document Intelligence",
