@@ -10,6 +10,20 @@ st.set_page_config(
 
 st.title("🤖 AI Document Intelligence Platform")
 st.write("Upload a PDF or TXT document and use AI to analyze it.")
+# YouTube Class Notes
+st.subheader("🎥 YouTube Class Notes")
+
+youtube_url = st.text_input(
+    "🔗 Paste a YouTube class/video link"
+)
+
+if st.button("📝 Generate YouTube Short Notes"):
+
+    if not youtube_url.strip():
+        st.warning("Please paste a YouTube link.")
+
+    else:
+        st.info("🎥 YouTube video received. Processing...")
 
 # Gemini API
 try:
