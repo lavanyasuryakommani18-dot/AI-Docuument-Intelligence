@@ -31,11 +31,43 @@ youtube_url = st.text_input(
 if st.button("📝 Generate YouTube Short Notes"):
 
     if not youtube_url.strip():
+
         st.warning("Please paste a YouTube link.")
 
     else:
-        st.info("🎥 YouTube video received. Processing...")
 
+        video_id = get_youtube_video_id(youtube_url)
+
+        if video_id is None:
+
+            st.error("❌ Please enter a valid YouTube link.")
+
+        else:
+
+            try:
+
+                ytt_api = YouTubeTranscriptApi()
+
+                transcript = ytt_api.fetch(video_id)
+
+                transcript_text = " ".join(
+                    snippet.text for snippet in transcript
+                )
+
+                st.success("✅ YouTube transcript fetched successfully!")
+
+                st.text_area(
+                    "📋 Video Transcript",
+                    transcript_text,
+                    height=250
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"❌ Could not fetch transcript: {e}"
+                )
+                
 # Gemini API
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
