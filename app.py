@@ -48,13 +48,33 @@ if st.button("📝 Generate YouTube Short Notes"):
 
                 ytt_api = YouTubeTranscriptApi()
 
-transcript_list = ytt_api.list(video_id)
+                transcript_list = ytt_api.list(video_id)
 
-transcript = transcript_list.find_transcript(
-    [t.language_code for t in transcript_list]
-)
+                transcript = transcript_list.find_transcript(
+                    [t.language_code for t in transcript_list]
+                )
 
-transcript = transcript.fetch() 
+                transcript = transcript.fetch()
+
+                transcript_text = " ".join(
+                    snippet.text for snippet in transcript
+                )
+
+                st.success(
+                    "✅ YouTube transcript fetched successfully!"
+                )
+
+                st.text_area(
+                    "📋 Video Transcript",
+                    transcript_text,
+                    height=250
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"❌ Could not fetch transcript: {e}"
+                )
 
                 transcript_text = " ".join(
                     snippet.text for snippet in transcript
