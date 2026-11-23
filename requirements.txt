@@ -1,4 +1,5 @@
 streamlit
 pypdf
 google-genai
-youtube-transcript-api
+requests
+beautifulsoup4
