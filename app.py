@@ -2,6 +2,8 @@ import streamlit as st
 from pypdf import PdfReader
 from google import genai
 import base64
+import requests
+from bs4 import BeautifulSoup
 
 def get_youtube_video_id(url):
     if "watch?v=" in url:
