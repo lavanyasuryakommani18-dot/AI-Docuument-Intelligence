@@ -62,14 +62,6 @@ try:
 except Exception:
     client = None
     
-st.divider()
-
-st.header("🌐 Website Content Intelligence")
-
-st.write(
-    "Paste a website URL to extract important information and generate short notes."
-)
-
 # Upload document
 uploaded_file = st.file_uploader(
     "📄 Upload your document",
