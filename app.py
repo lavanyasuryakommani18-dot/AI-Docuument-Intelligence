@@ -5,6 +5,11 @@ import base64
 import requests
 from bs4 import BeautifulSoup
 
+
+# ---------------------------------
+# WEBSITE CONTENT EXTRACTION
+# ---------------------------------
+
 def extract_website_content(url):
 
     headers = {
@@ -34,9 +39,17 @@ def extract_website_content(url):
     ]):
         tag.decompose()
 
-    title = soup.title.get_text(strip=True) if soup.title else "Website Content"
+    title = (
+        soup.title.get_text(strip=True)
+        if soup.title
+        else "Website Content"
+    )
 
-    content = soup.find("main") or soup.find("article") or soup.body
+    content = (
+        soup.find("main")
+        or soup.find("article")
+        or soup.body
+    )
 
     if content is None:
         return title, ""
@@ -47,24 +60,44 @@ def extract_website_content(url):
     )
 
     return title, website_text
+
+
+# ---------------------------------
+# PAGE SETTINGS
+# ---------------------------------
+
 st.set_page_config(
     page_title="AI Document Intelligence",
     page_icon="🤖"
 )
 
 st.title("🤖 AI Document Intelligence Platform")
-st.write("Upload a PDF or TXT document and use AI to analyze it.")
 
-# Gemini API
+st.write(
+    "Upload a PDF or TXT document and use AI to analyze it."
+)
+
+
+# ---------------------------------
+# GEMINI API
+# ---------------------------------
+
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     client = genai.Client(api_key=api_key)
+
 except Exception:
     client = None
-    
-# Upload document
+
+
+# =================================
+# SECTION 1: PDF / TXT ANALYSIS
+# =================================
+
+st.header("📄 Document Analysis")
+
 uploaded_file = st.file_uploader(
-    "📄 Upload your document",
+    "Upload your document",
     type=["pdf", "txt"]
 )
 
@@ -85,12 +118,12 @@ if uploaded_file is not None:
         reader = PdfReader(uploaded_file)
 
         for page in reader.pages:
+
             page_text = page.extract_text()
 
             if page_text:
                 text += page_text + "\n"
 
-        # Detect scanned PDF
         if not text.strip():
             is_scanned_pdf = True
 
@@ -100,9 +133,7 @@ if uploaded_file is not None:
         text = uploaded_file.read().decode("utf-8")
 
 
-    # -----------------------------
     # TEXT PDF / TXT
-    # -----------------------------
 
     if text.strip():
 
@@ -114,12 +145,12 @@ if uploaded_file is not None:
             height=250
         )
 
-        st.success("✅ Document text extracted successfully!")
+        st.success(
+            "Document text extracted successfully! ✅"
+        )
 
 
-    # -----------------------------
     # SCANNED PDF
-    # -----------------------------
 
     elif is_scanned_pdf:
 
@@ -128,7 +159,6 @@ if uploaded_file is not None:
             "Gemini AI will read the document directly."
         )
 
-
     else:
 
         st.warning(
@@ -136,9 +166,7 @@ if uploaded_file is not None:
         )
 
 
-    # -----------------------------
-    # AI SECTION
-    # -----------------------------
+    # AI DOCUMENT ANALYSIS
 
     if text.strip() or is_scanned_pdf:
 
@@ -178,9 +206,7 @@ if uploaded_file is not None:
 
             else:
 
-                # -----------------------------
                 # PROMPTS
-                # -----------------------------
 
                 if option == "Summarize Document":
 
@@ -193,7 +219,6 @@ Include the main points and important information.
 Do not invent information.
 """
 
-
                 elif option == "Extract Important Information":
 
                     prompt = """
@@ -205,7 +230,6 @@ Use clear headings and bullet points.
 Do not invent information.
 """
 
-
                 elif option == "Classify Document":
 
                     prompt = """
@@ -215,7 +239,6 @@ Identify the type/category of this document.
 
 Also explain briefly why you selected that category.
 """
-
 
                 else:
 
@@ -233,7 +256,6 @@ USER QUESTION:
 {question}
 """
 
-
                 try:
 
                     with st.spinner(
@@ -241,6 +263,7 @@ USER QUESTION:
                     ):
 
                         # SCANNED PDF
+
                         if is_scanned_pdf:
 
                             pdf_base64 = base64.b64encode(
@@ -264,8 +287,8 @@ USER QUESTION:
                                 ]
                             )
 
-
                         # TEXT PDF / TXT
+
                         else:
 
                             full_prompt = f"""
@@ -282,14 +305,11 @@ DOCUMENT:
                                 input=full_prompt
                             )
 
-
                         result = response.output_text
-
 
                     st.subheader("🧠 AI Result")
 
                     st.write(result)
-
 
                     st.download_button(
                         "⬇️ Download AI Result",
@@ -298,9 +318,88 @@ DOCUMENT:
                         mime="text/plain"
                     )
 
-
                 except Exception as e:
 
                     st.error(
                         f"Something went wrong: {e}"
                     )
+
+
+# =================================
+# SECTION 2: WEBSITE INTELLIGENCE
+# =================================
+
+st.divider()
+
+st.header("🌐 Website Content Intelligence")
+
+st.write(
+    "Paste a website URL to extract important information "
+    "and generate short notes."
+)
+
+website_url = st.text_input(
+    "🔗 Enter Website URL",
+    placeholder="https://www.example.com"
+)
+
+
+if st.button("🌐 Extract Website Content"):
+
+    if not website_url.strip():
+
+        st.warning("Please enter a website URL.")
+
+    elif not website_url.startswith(("http://", "https://")):
+
+        st.warning(
+            "Please enter a valid URL starting with http:// or https://"
+        )
+
+    else:
+
+        try:
+
+            with st.spinner(
+                "🌐 Extracting website content..."
+            ):
+
+                website_title, website_text = (
+                    extract_website_content(website_url)
+                )
+
+            if not website_text.strip():
+
+                st.warning(
+                    "No readable content found on this website."
+                )
+
+            else:
+
+                st.success(
+                    "Website content extracted successfully! ✅"
+                )
+
+                st.subheader("📌 Website Title")
+
+                st.write(website_title)
+
+                st.subheader("📋 Extracted Website Content")
+
+                st.text_area(
+                    "Website text",
+                    website_text,
+                    height=250
+                )
+
+        except requests.exceptions.RequestException as e:
+
+            st.error(
+                f"Unable to access website: {e}"
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Something went wrong: {e}"
+            )
