@@ -324,7 +324,6 @@ DOCUMENT:
                         f"Something went wrong: {e}"
                     )
 
-
 # =================================
 # SECTION 2: WEBSITE INTELLIGENCE
 # =================================
@@ -334,8 +333,7 @@ st.divider()
 st.header("🌐 Website Content Intelligence")
 
 st.write(
-    "Paste a website URL to extract important information "
-    "and generate short notes."
+    "Paste a website URL to extract content and analyze it using AI."
 )
 
 website_url = st.text_input(
@@ -343,6 +341,13 @@ website_url = st.text_input(
     placeholder="https://www.example.com"
 )
 
+if "website_text" not in st.session_state:
+    st.session_state.website_text = ""
+
+if "website_title" not in st.session_state:
+    st.session_state.website_title = ""
+
+# WEBSITE EXTRACTION
 
 if st.button("🌐 Extract Website Content"):
 
@@ -352,54 +357,174 @@ if st.button("🌐 Extract Website Content"):
 
     elif not website_url.startswith(("http://", "https://")):
 
-        st.warning(
-            "Please enter a valid URL starting with http:// or https://"
-        )
+        st.warning("Please enter a valid website URL.")
 
     else:
 
         try:
 
-            with st.spinner(
-                "🌐 Extracting website content..."
-            ):
+            with st.spinner("🌐 Extracting website content..."):
 
-                website_title, website_text = (
-                    extract_website_content(website_url)
+                website_title, website_text = extract_website_content(
+                    website_url.strip()
                 )
 
             if not website_text.strip():
 
-                st.warning(
-                    "No readable content found on this website."
-                )
+                st.warning("No readable content found.")
 
             else:
 
-                st.success(
-                    "Website content extracted successfully! ✅"
-                )
+                st.session_state.website_title = website_title
 
-                st.subheader("📌 Website Title")
+                # Limit content to improve processing speed
+                st.session_state.website_text = website_text[:20000]
 
-                st.write(website_title)
-
-                st.subheader("📋 Extracted Website Content")
-
-                st.text_area(
-                    "Website text",
-                    website_text,
-                    height=250
-                )
+                st.success("Website content extracted successfully! ✅")
 
         except requests.exceptions.RequestException as e:
 
-            st.error(
-                f"Unable to access website: {e}"
-            )
+            st.error(f"Unable to access website: {e}")
 
         except Exception as e:
 
-            st.error(
-                f"Something went wrong: {e}"
-            )
+            st.error(f"Something went wrong: {e}")
+
+
+# DISPLAY WEBSITE CONTENT
+
+if st.session_state.website_text:
+
+    st.subheader("📌 Website Title")
+
+    st.write(st.session_state.website_title)
+
+    st.subheader("📋 Extracted Website Content")
+
+    st.text_area(
+        "Website text",
+        st.session_state.website_text,
+        height=200
+    )
+
+    st.divider()
+
+    # AI OPTIONS
+
+    st.subheader("🤖 Website AI Analysis")
+
+    option = st.selectbox(
+        "Choose an AI action",
+        [
+            "Summarize Website",
+            "Extract Important Information",
+            "Generate Short Notes",
+            "Ask Questions"
+        ]
+    )
+
+    language = st.selectbox(
+        "🌍 Select Notes Language",
+        [
+            "English",
+            "Telugu",
+            "Telugu + English"
+        ]
+    )
+
+    question = ""
+
+    if option == "Ask Questions":
+
+        question = st.text_input(
+            "❓ Ask a question about this website"
+        )
+
+    if st.button("✨ Generate Website AI Result"):
+
+        if client is None:
+
+            st.error("Gemini API key not found.")
+
+        elif option == "Ask Questions" and not question.strip():
+
+            st.warning("Please enter your question.")
+
+        else:
+
+            language_instruction = {
+                "English": "Write completely in simple English.",
+                "Telugu": "Write completely in simple Telugu.",
+                "Telugu + English": "Explain in natural Telugu mixed with simple English words."
+            }
+
+            if option == "Summarize Website":
+
+                task = "Summarize the website content using simple language and clear headings."
+
+            elif option == "Extract Important Information":
+
+                task = "Extract all important information using headings and bullet points."
+
+            elif option == "Generate Short Notes":
+
+                task = "Create short, easy-to-understand study notes with important points."
+
+            else:
+
+                task = f"""
+Answer this question using ONLY the website content:
+
+{question}
+
+If the answer is not available, say:
+Answer not found in the website content.
+"""
+
+            prompt = f"""
+You are an AI Website Intelligence Assistant.
+
+TASK:
+{task}
+
+LANGUAGE:
+{language_instruction[language]}
+
+RULES:
+1. Use only the provided website content.
+2. Do not invent information.
+3. Use simple and clear explanations.
+4. Keep the output concise and useful.
+
+WEBSITE TITLE:
+{st.session_state.website_title}
+
+WEBSITE CONTENT:
+{st.session_state.website_text}
+"""
+
+            try:
+
+                with st.spinner("🤖 Gemini AI is analyzing the website..."):
+
+                    response = client.interactions.create(
+                        model="gemini-3.8-flash",
+                        input=prompt
+                    )
+
+                    result = response.output_text
+
+                st.subheader("🧠 AI Generated Result")
+
+                st.write(result)
+
+                st.download_button(
+                    "⬇️ Download Website Notes",
+                    result,
+                    file_name="Website_AI_Notes.txt",
+                    mime="text/plain"
+                )
+
+            except Exception as e:
+
+                st.error(f"AI Analysis Error: {e}")
