@@ -5,16 +5,48 @@ import base64
 import requests
 from bs4 import BeautifulSoup
 
-def get_youtube_video_id(url):
-    if "watch?v=" in url:
-        return url.split("watch?v=")[1].split("&")[0]
-    elif "youtu.be/" in url:
-        return url.split("youtu.be/")[1].split("?")[0]
-    elif "youtube.com/shorts/" in url:
-        return url.split("youtube.com/shorts/")[1].split("?")[0]
-    else:
-        return None
+def extract_website_content(url):
 
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=20
+    )
+
+    response.raise_for_status()
+
+    soup = BeautifulSoup(
+        response.text,
+        "html.parser"
+    )
+
+    for tag in soup([
+        "script",
+        "style",
+        "nav",
+        "footer",
+        "header",
+        "noscript"
+    ]):
+        tag.decompose()
+
+    title = soup.title.get_text(strip=True) if soup.title else "Website Content"
+
+    content = soup.find("main") or soup.find("article") or soup.body
+
+    if content is None:
+        return title, ""
+
+    website_text = content.get_text(
+        separator=" ",
+        strip=True
+    )
+
+    return title, website_text
 st.set_page_config(
     page_title="AI Document Intelligence",
     page_icon="🤖"
@@ -22,132 +54,21 @@ st.set_page_config(
 
 st.title("🤖 AI Document Intelligence Platform")
 st.write("Upload a PDF or TXT document and use AI to analyze it.")
-# YouTube Class Notes
-st.subheader("🎥 YouTube Class Notes")
 
-youtube_url = st.text_input(
-    "🔗 Paste a YouTube class/video link"
-)
-notes_language = st.selectbox(
-    "Select Notes Language",
-    ["English", "Telugu", "Telugu + English"]
-)
-
-if st.button("📝 Generate YouTube Short Notes"):
-
-    if not youtube_url.strip():
-
-        st.warning("Please paste a YouTube link.")
-
-    else:
-
-        video_id = get_youtube_video_id(youtube_url)
-
-        if video_id is None:
-
-            st.error("❌ Please enter a valid YouTube link.")
-
-        else:
-
-            try:
-
-                ytt_api = YouTubeTranscriptApi()
-
-                transcript_list = ytt_api.list(video_id)
-
-                transcript = transcript_list.find_transcript(
-                    [t.language_code for t in transcript_list]
-                )
-
-                transcript = transcript.fetch()
-
-                transcript_text = " ".join(
-                    snippet.text for snippet in transcript
-                )
-
-                st.success("✅ YouTube transcript fetched successfully!")
-
-                st.text_area(
-                    "📋 Video Transcript",
-                    transcript_text,
-                    height=250
-                )
-            if client is None:
-
-    st.error(
-        "Gemini API key not found. Please check Streamlit Secrets."
-    )
-
-else:
-
-    if notes_language == "English":
-
-        language_instruction = "Write the notes in simple English."
-
-    elif notes_language == "Telugu":
-
-        language_instruction = "Write the notes in simple Telugu."
-
-    else:
-
-        language_instruction = """
-Write the notes in simple Telugu using English letters.
-Keep important technical terms in English.
-"""
-
-    youtube_prompt = f"""
-You are an AI class notes assistant.
-
-Create short and easy-to-understand notes from the YouTube transcript.
-
-{language_instruction}
-
-Requirements:
-- Give a short title.
-- Use clear headings.
-- Use bullet points.
-- Include only important concepts.
-- Keep the notes concise.
-- Do not invent information.
-- Make it useful for exam revision.
-
-TRANSCRIPT:
-{transcript_text}
-"""
-
-    with st.spinner("🤖 Gemini is creating class notes..."):
-
-        response = client.interactions.create(
-            model="gemini-3.5-flash-lite",
-            input=youtube_prompt
-        )
-
-        notes = response.output_text
-
-    st.subheader("📚 YouTube Class Notes")
-
-    st.write(notes)
-
-    st.download_button(
-        "⬇️ Download Class Notes",
-        notes,
-        file_name="YouTube_Class_Notes.txt",
-        mime="text/plain"
-    )
-
-            except Exception as e:
-
-                st.error(
-                    f"❌ Could not fetch transcript: {e}"
-                )
-                
 # Gemini API
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     client = genai.Client(api_key=api_key)
 except Exception:
     client = None
+    
+st.divider()
 
+st.header("🌐 Website Content Intelligence")
+
+st.write(
+    "Paste a website URL to extract important information and generate short notes."
+)
 
 # Upload document
 uploaded_file = st.file_uploader(
