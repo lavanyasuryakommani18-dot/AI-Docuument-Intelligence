@@ -1,11 +1,12 @@
 import streamlit as st
-from pypdf import PdfReader
 from google import genai
 from google.genai import types
 import io
+import time
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+from pypdf import PdfReader
 
 
 # =================================
@@ -27,12 +28,17 @@ st.write(
 
 
 # =================================
-# GEMINI API
+# GEMINI API CONFIGURATION
 # =================================
 
-MODEL_NAME = "gemini-3.8-flash"
+# Primary model and backup model
+MODEL_NAMES = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash"
+]
 
 try:
+
     api_key = st.secrets["GEMINI_API_KEY"]
 
     client = genai.Client(
@@ -40,38 +46,93 @@ try:
     )
 
 except Exception:
+
     client = None
 
 
 # =================================
-# COMMON AI STREAMING FUNCTION
+# COMMON AI FUNCTION WITH RETRY
 # =================================
 
-def generate_ai_response(contents):
+def generate_ai_result(contents):
 
-    response_stream = client.models.generate_content_stream(
-        model=MODEL_NAME,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            temperature=0.2,
-            max_output_tokens=900
-        )
+    if client is None:
+        raise Exception("Gemini API key is missing.")
+
+    last_error = None
+
+    for model_name in MODEL_NAMES:
+
+        for attempt in range(2):
+
+            try:
+
+                response = client.models.generate_content(
+
+                    model=model_name,
+
+                    contents=contents,
+
+                    config=types.GenerateContentConfig(
+                        temperature=0.2,
+                        max_output_tokens=900
+                    )
+                )
+
+                result = response.text
+
+                if not result:
+                    raise Exception("Gemini returned an empty response.")
+
+                return result
+
+            except Exception as e:
+
+                last_error = e
+
+                error_message = str(e).upper()
+
+                temporary_errors = [
+                    "503",
+                    "UNAVAILABLE",
+                    "429",
+                    "RESOURCE_EXHAUSTED",
+                    "500",
+                    "502",
+                    "504",
+                    "INTERNAL"
+                ]
+
+                is_temporary = any(
+                    error in error_message
+                    for error in temporary_errors
+                )
+
+                # Retry once for temporary errors
+                if is_temporary and attempt == 0:
+
+                    time.sleep(2)
+                    continue
+
+                # Move to backup model
+                break
+
+    raise Exception(
+        "All Gemini models failed. "
+        f"Last error: {last_error}"
     )
 
-    for chunk in response_stream:
-
-        if chunk.text:
-            yield chunk.text
-
 
 # =================================
-# PDF / TXT EXTRACTION
+# PDF TEXT EXTRACTION
 # =================================
 
 @st.cache_data(show_spinner=False)
 def extract_document_text(pdf_bytes):
 
-    reader = PdfReader(io.BytesIO(pdf_bytes))
+    reader = PdfReader(
+        io.BytesIO(pdf_bytes)
+    )
 
     extracted_text = []
 
@@ -80,6 +141,7 @@ def extract_document_text(pdf_bytes):
         page_text = page.extract_text()
 
         if page_text:
+
             extracted_text.append(page_text)
 
     return "\n".join(extracted_text)
@@ -89,7 +151,10 @@ def extract_document_text(pdf_bytes):
 # WEBSITE CONTENT EXTRACTION
 # =================================
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(
+    ttl=600,
+    show_spinner=False
+)
 def extract_website_content(url):
 
     headers = {
@@ -133,6 +198,7 @@ def extract_website_content(url):
     )
 
     if content is None:
+
         return title, ""
 
     website_text = content.get_text(
@@ -157,13 +223,17 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    st.success("Document uploaded successfully! ✅")
+    st.success(
+        "Document uploaded successfully! ✅"
+    )
 
     text = ""
     pdf_bytes = None
     is_scanned_pdf = False
 
+    # ---------------------------------
     # PDF EXTRACTION
+    # ---------------------------------
 
     if uploaded_file.name.lower().endswith(".pdf"):
 
@@ -171,18 +241,27 @@ if uploaded_file is not None:
 
         try:
 
-            with st.spinner("📄 Extracting PDF text..."):
+            with st.spinner(
+                "📄 Extracting PDF text..."
+            ):
 
-                text = extract_document_text(pdf_bytes)
+                text = extract_document_text(
+                    pdf_bytes
+                )
 
             if not text.strip():
+
                 is_scanned_pdf = True
 
         except Exception as e:
 
-            st.error(f"PDF extraction error: {e}")
+            st.error(
+                f"PDF extraction error: {e}"
+            )
 
+    # ---------------------------------
     # TXT EXTRACTION
+    # ---------------------------------
 
     elif uploaded_file.name.lower().endswith(".txt"):
 
@@ -191,12 +270,15 @@ if uploaded_file is not None:
             errors="replace"
         )
 
-
+    # ---------------------------------
     # DISPLAY EXTRACTED TEXT
+    # ---------------------------------
 
     if text.strip():
 
-        st.subheader("📋 Extracted Document Text")
+        st.subheader(
+            "📋 Extracted Document Text"
+        )
 
         st.text_area(
             "Document content",
@@ -204,10 +286,13 @@ if uploaded_file is not None:
             height=220
         )
 
-        st.success("Document text extracted successfully! ✅")
+        st.success(
+            "Document text extracted successfully! ✅"
+        )
 
-
+    # ---------------------------------
     # SCANNED PDF
+    # ---------------------------------
 
     elif is_scanned_pdf:
 
@@ -218,14 +303,19 @@ if uploaded_file is not None:
 
     else:
 
-        st.warning("No readable text found.")
+        st.warning(
+            "No readable text found."
+        )
 
-
+    # ---------------------------------
     # DOCUMENT AI ANALYSIS
+    # ---------------------------------
 
     if text.strip() or is_scanned_pdf:
 
-        st.subheader("🤖 AI Document Analysis")
+        st.subheader(
+            "🤖 AI Document Analysis"
+        )
 
         doc_option = st.selectbox(
             "Choose an AI action",
@@ -247,7 +337,6 @@ if uploaded_file is not None:
                 key="document_question"
             )
 
-
         if st.button(
             "✨ Generate AI Result",
             key="document_generate"
@@ -255,46 +344,62 @@ if uploaded_file is not None:
 
             if client is None:
 
-                st.error("Gemini API key not found. Check Streamlit Secrets.")
+                st.error(
+                    "Gemini API key not found. "
+                    "Please check Streamlit Secrets."
+                )
 
-            elif doc_option == "Ask Questions" and not doc_question.strip():
+            elif (
+                doc_option == "Ask Questions"
+                and not doc_question.strip()
+            ):
 
-                st.warning("Please enter your question.")
+                st.warning(
+                    "Please enter your question."
+                )
 
             else:
+
+                # PROMPTS
 
                 if doc_option == "Summarize Document":
 
                     prompt = """
-Summarize this document in simple language.
+You are an AI document analysis assistant.
+
+Summarize this document in simple and clear language.
 
 Include:
 1. Main topic
 2. Important points
 3. Main conclusion
 
-Use clear headings and bullet points.
+Use headings and bullet points.
 Do not invent information.
 """
 
                 elif doc_option == "Extract Important Information":
 
                     prompt = """
+You are an AI document analysis assistant.
+
 Extract the important information from this document.
 
-Use:
+Include:
 1. Important facts
 2. Names and dates
 3. Key information
 4. Important numbers
 
-Use clear bullet points.
+Use clear headings and bullet points.
 Do not invent information.
 """
 
                 elif doc_option == "Classify Document":
 
                     prompt = """
+You are an AI document classification system.
+
 Identify the category of this document.
 
 Explain:
@@ -308,7 +413,9 @@ Use simple language.
                 else:
 
                     prompt = f"""
-Answer the user's question ONLY using the document.
+You are an AI document question-answering assistant.
+
+Answer ONLY using the information in the document.
 
 QUESTION:
 {doc_question}
@@ -317,67 +424,74 @@ If the answer is unavailable, say:
 Answer not found in the document.
 """
 
+                # ---------------------------------
+                # AI PROCESSING
+                # ---------------------------------
 
                 try:
 
-                    st.subheader("🧠 AI Result")
+                    if is_scanned_pdf:
 
-                    with st.spinner("🤖 AI is analyzing the document..."):
+                        contents = [
 
-                        if is_scanned_pdf:
+                            types.Part.from_text(
+                                text=prompt
+                            ),
 
-                            contents = [
-                                types.Part.from_text(
-                                    text=prompt
-                                ),
-                                types.Part.from_bytes(
-                                    data=pdf_bytes,
-                                    mime_type="application/pdf"
-                                )
-                            ]
+                            types.Part.from_bytes(
+                                data=pdf_bytes,
+                                mime_type="application/pdf"
+                            )
+                        ]
 
-                        else:
+                    else:
 
-                            # Limit very large text inputs
-                            document_text = text[:30000]
+                        # Limit large text for faster processing
+                        document_text = text[:20000]
 
-                            if len(text) > 30000:
+                        if len(text) > 20000:
 
-                                st.info(
-                                    "Large document detected. "
-                                    "The first 30,000 characters "
-                                    "are being analyzed."
-                                )
+                            st.info(
+                                "Large document detected. "
+                                "The first 20,000 characters "
+                                "are being analyzed."
+                            )
 
-                            full_prompt = f"""
+                        contents = f"""
 {prompt}
 
 DOCUMENT:
 {document_text}
 """
 
-                            contents = full_prompt
+                    with st.spinner(
+                        "🤖 Gemini AI is analyzing the document..."
+                    ):
 
-                        result = st.write_stream(
-                            generate_ai_response(contents)
+                        result = generate_ai_result(
+                            contents
                         )
 
-                    if result and result.strip():
+                    st.subheader("🧠 AI Result")
 
-                        st.download_button(
-                            "⬇️ Download AI Result",
-                            result,
-                            file_name="AI_Document_Result.txt",
-                            mime="text/plain"
-                        )
+                    st.write(result)
 
-                    else:
+                    st.success(
+                        "Document analysis completed! ✅"
+                    )
 
-                        st.warning("AI returned an empty response.")
+                    st.download_button(
+                        "⬇️ Download AI Result",
+                        result,
+                        file_name="AI_Document_Result.txt",
+                        mime="text/plain"
+                    )
 
                 except Exception as e:
 
-                    st.error(f"Document AI Error: {e}")
+                    st.error(
+                        f"Document AI Error: {e}"
+                    )
 
 
 # =================================
@@ -386,7 +500,9 @@ DOCUMENT:
 
 st.divider()
 
-st.header("🌐 Website Content Intelligence")
+st.header(
+    "🌐 Website Content Intelligence"
+)
 
 st.write(
     "Paste a website URL to extract content "
@@ -394,7 +510,9 @@ st.write(
 )
 
 
+# ---------------------------------
 # SESSION STATE
+# ---------------------------------
 
 if "website_text" not in st.session_state:
 
@@ -405,7 +523,9 @@ if "website_title" not in st.session_state:
     st.session_state.website_title = ""
 
 
+# ---------------------------------
 # WEBSITE URL INPUT
+# ---------------------------------
 
 website_url = st.text_input(
     "🔗 Enter Website URL",
@@ -423,47 +543,67 @@ if st.button(
     key="website_extract"
 ):
 
-    parsed_url = urlparse(website_url.strip())
+    parsed_url = urlparse(
+        website_url.strip()
+    )
 
     if (
         parsed_url.scheme not in ["http", "https"]
         or not parsed_url.netloc
     ):
 
-        st.warning("Please enter a valid website URL.")
+        st.warning(
+            "Please enter a valid website URL."
+        )
 
     else:
 
         try:
 
-            with st.spinner("🌐 Extracting website content..."):
+            with st.spinner(
+                "🌐 Extracting website content..."
+            ):
 
-                website_title, website_text = extract_website_content(
-                    website_url.strip()
+                website_title, website_text = (
+                    extract_website_content(
+                        website_url.strip()
+                    )
                 )
 
             if not website_text.strip():
 
-                st.warning("No readable content found.")
+                st.warning(
+                    "No readable content found."
+                )
 
                 st.session_state.website_text = ""
 
             else:
 
-                st.session_state.website_title = website_title
+                st.session_state.website_title = (
+                    website_title
+                )
 
-                # Limit website content for faster AI processing
-                st.session_state.website_text = website_text[:12000]
+                # Limit website content
+                st.session_state.website_text = (
+                    website_text[:10000]
+                )
 
-                st.success("Website content extracted successfully! ✅")
+                st.success(
+                    "Website content extracted successfully! ✅"
+                )
 
         except requests.exceptions.RequestException as e:
 
-            st.error(f"Unable to access website: {e}")
+            st.error(
+                f"Unable to access website: {e}"
+            )
 
         except Exception as e:
 
-            st.error(f"Website extraction error: {e}")
+            st.error(
+                f"Website extraction error: {e}"
+            )
 
 
 # =================================
@@ -474,9 +614,13 @@ if st.session_state.website_text:
 
     st.subheader("📌 Website Title")
 
-    st.write(st.session_state.website_title)
+    st.write(
+        st.session_state.website_title
+    )
 
-    st.subheader("📋 Extracted Website Content")
+    st.subheader(
+        "📋 Extracted Website Content"
+    )
 
     st.text_area(
         "Website text",
@@ -487,11 +631,13 @@ if st.session_state.website_text:
 
     st.divider()
 
-    # =================================
+    # ---------------------------------
     # WEBSITE AI OPTIONS
-    # =================================
+    # ---------------------------------
 
-    st.subheader("🤖 Website AI Analysis")
+    st.subheader(
+        "🤖 Website AI Analysis"
+    )
 
     website_option = st.selectbox(
         "Choose an AI action",
@@ -504,8 +650,9 @@ if st.session_state.website_text:
         key="website_action"
     )
 
-
+    # ---------------------------------
     # LANGUAGE SELECTION
+    # ---------------------------------
 
     language = st.selectbox(
         "🌍 Select Notes Language",
@@ -517,8 +664,9 @@ if st.session_state.website_text:
         key="website_language"
     )
 
-
+    # ---------------------------------
     # QUESTION INPUT
+    # ---------------------------------
 
     website_question = ""
 
@@ -528,7 +676,6 @@ if st.session_state.website_text:
             "❓ Ask a question about this website",
             key="website_question"
         )
-
 
     # =================================
     # WEBSITE AI GENERATION
@@ -541,16 +688,22 @@ if st.session_state.website_text:
 
         if client is None:
 
-            st.error("Gemini API key not found.")
+            st.error(
+                "Gemini API key not found."
+            )
 
         elif (
             website_option == "Ask Questions"
             and not website_question.strip()
         ):
 
-            st.warning("Please enter your question.")
+            st.warning(
+                "Please enter your question."
+            )
 
         else:
+
+            # LANGUAGE INSTRUCTIONS
 
             language_instruction = {
 
@@ -558,14 +711,15 @@ if st.session_state.website_text:
                 "Write completely in simple English.",
 
                 "Telugu":
-                "Write completely in natural Telugu language.",
+                "Write completely in natural Telugu.",
 
                 "Telugu + English":
                 "Explain in natural Telugu mixed with simple English words."
             }
 
-
+            # ---------------------------------
             # SELECT TASK
+            # ---------------------------------
 
             if website_option == "Summarize Website":
 
@@ -592,7 +746,7 @@ Include important facts, dates, names and numbers.
                 task = """
 Create short and easy-to-understand study notes.
 
-Use:
+Include:
 1. Topic headings
 2. Short explanations
 3. Important points
@@ -612,8 +766,9 @@ If the answer is unavailable, say:
 Answer not found in the website content.
 """
 
-
+            # ---------------------------------
             # FINAL PROMPT
+            # ---------------------------------
 
             prompt = f"""
 You are an AI Website Intelligence Assistant.
@@ -638,40 +793,42 @@ WEBSITE CONTENT:
 {st.session_state.website_text}
 """
 
-
-            # GENERATE RESULT
+            # ---------------------------------
+            # GENERATE AI RESULT
+            # ---------------------------------
 
             try:
-
-                st.subheader("🧠 AI Generated Result")
 
                 with st.spinner(
                     "🤖 Gemini AI is analyzing the website..."
                 ):
 
-                    result = st.write_stream(
-                        generate_ai_response(prompt)
+                    result = generate_ai_result(
+                        prompt
                     )
 
+                st.subheader(
+                    "🧠 AI Generated Result"
+                )
 
-                if result and result.strip():
+                st.write(result)
 
-                    st.success("Website analysis completed! ✅")
+                st.success(
+                    "Website analysis completed! ✅"
+                )
 
-                    st.download_button(
-                        "⬇️ Download Website AI Result",
-                        result,
-                        file_name="Website_AI_Notes.txt",
-                        mime="text/plain"
-                    )
-
-                else:
-
-                    st.warning("AI returned an empty response.")
+                st.download_button(
+                    "⬇️ Download Website AI Result",
+                    result,
+                    file_name="Website_AI_Notes.txt",
+                    mime="text/plain"
+                )
 
             except Exception as e:
 
-                st.error(f"Website AI Analysis Error: {e}")
+                st.error(
+                    f"Website AI Analysis Error: {e}"
+                )
 
 
 # =================================
